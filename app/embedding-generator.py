@@ -71,6 +71,45 @@ sentences=[
 #step7: generate embeddings
 embeddings=model.encode(chunks,show_progress_bar=True)
 similarity_matrix=cosine_similarity(embeddings)
+
+
+from pathlib import Path
+import chromadb
+#create a persistent ChromaDB instance
+client=chromadb.PersistentClient(path=str(project_root/"chroma_db"))
+
+#create or access a collection
+collection=client.get_or_create_collection(
+    name="support_documents",
+    metadata={"hnsw:space":"cosine"}
+)
+
+#generate unique ids for document chunks
+ids=[
+    f"password-policy-chunk-{i+1:03d}" for i in range(len(chunks))
+]
+
+#Store source information of each chunk
+metadatas=[
+    {
+        "source":"password-policy.md",
+        "chunk_index":i
+    }
+    for i in range(len(chunks))
+]
+
+# Store chunks,embeddings, and metadate
+collection.upsert(
+    ids=ids,
+    documents=chunks,
+    embeddings=embeddings.tolist(),
+    metadatas=metadatas
+)
+
+stored_data=collection.get(
+    include=["documents","metadatas","embeddings"]
+)
+
 #dispaly results
 print("Embeddings:", embeddings)
 print("Shape of embeddings:",embeddings.shape)
@@ -82,4 +121,10 @@ print("Values in first vector:", len(embeddings[0]))
 
 print("First 10 values:", embeddings[0][:10])
 
+#printing documents stored in vector database
+print("Documents stored successfully")
+print("Total records:",collection.count())
 
+print("\nStored documents:")
+print(stored_data)
+print("Embedding shape:", stored_data["embeddings"].shape)
